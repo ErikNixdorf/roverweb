@@ -14,7 +14,7 @@ import geopandas as gpd
 import requests
 
 
-def retrieve_soilgrid_wcs(inpt_data,
+def apnd_from_wcs(inpt_data,
                           soilgridlrs={'sg250m:ORCDRC_M_sl1_250m': 'ORCDRC_sl1',
                                        'sg250m:BLDFIE_M_sl1_250m': 'BLDFIE_sl1',
                                        'sg250m:CLYPPT_M_sl1_250m': 'CLYPPT_sl1'},
@@ -90,7 +90,7 @@ def retrieve_soilgrid_wcs(inpt_data,
     return outpt_data
 
 
-def retrieve_soilgrid_restapi(inpt_data,
+def apnd_from_restapi(inpt_data,
                               soil_attributes=['ORCDRC', 'BLDFIE', 'CLYPPT'],
                               soil_layerdepths=['sl1'], output=None):
     """

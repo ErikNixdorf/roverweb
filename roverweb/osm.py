@@ -77,9 +77,9 @@ def querybound_generation(gdf_in):
     return querybound
 
 
-def retrieve_osm_api(gdfin, querybound,
-                     queryfeatures={'way': ['landuse', 'highway']},
-                     value_in=None, value_out=None, CountValues=False):
+def apnd_from_overpass(gdfin, querybound,
+                    queryfeatures={'way': ['landuse', 'highway']},
+                    value_in=None, value_out=None, CountValues=False):
     """
     Get the queried features from the Overpass API
     # for documentation see https://wiki.openstreetmap.org/wiki/Overpass_API
@@ -90,7 +90,7 @@ def retrieve_osm_api(gdfin, querybound,
     api = overpass.API(timeout=2000)
 
     # get data from OSM and count server request try'"'
-    for element,_ in queryfeatures.items():
+    for element, _ in queryfeatures.items():
             for key in queryfeatures[element]:
 
                 # remove index_right if occuring
@@ -139,8 +139,10 @@ def retrieve_osm_api(gdfin, querybound,
                     # in this case we have to rename the colfrom key to value
                     gdfosm = gdfosm.rename(columns={key: value_in})
                     key = value_in  # bad solution...
-                # add ID column to input data
-                gdfin['ID'] = range(0, gdfin.shape[0])
+                # add ID column to input data if not existing
+                if 'ID' not in gdfin.columns:
+                    gdfin.insert(gdfin.shape[1], 'ID',
+                                 range(0, gdfin.shape[0]))
                 # join with inout gdf
                 gdfjoined = gpd.tools.sjoin(gdfin, gdfosm, how='left')
 
@@ -169,7 +171,10 @@ def retrieve_osm_api(gdfin, querybound,
                 else:  # if it is equal things are more easy
                     if CountValues:
                         gdfjoined.rename(columns={key: 'No_of_'+key})
-                        gdfjoined['No_of_'+key].fillna(0, inplace=True)
+                        try:
+                            gdfjoined['No_of_'+key].fillna(0, inplace=True)
+                        except Exception:
+                            print('No values type', key, 'queried')
                     gdfmerged = gdfjoined
                 # remove index_right if occuring
                 try:

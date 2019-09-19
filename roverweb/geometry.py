@@ -42,9 +42,9 @@ def from_csv(inpt_data, geomtrcol=['LongDec', 'LatDec'],
         return None
 
 
-def cluster_rovertrack(inpt_data, geomtrcol=['LongDec', 'LatDec'],
-                       src_crs={'init': 'epsg:4326'}, clusters=3,
-                       cluster_fld_name='ClusterID'):
+def clustering(inpt_data, geomtrcol=['LongDec', 'LatDec'],
+               src_crs={'init': 'epsg:4326'}, clusters=3,
+               cluster_fld_name='ClusterID'):
     """
     This function takes either a csv input file or shape or geodataframe
     as input and starts the clustering,
@@ -62,15 +62,19 @@ def cluster_rovertrack(inpt_data, geomtrcol=['LongDec', 'LatDec'],
                 print(e)
                 print('only vector GIS formats supported')
 
-    # now we start the clustering
-    points_xy = np.column_stack((inpt_data.geometry.x,
-                                 inpt_data.geometry.y))
+    # now we start the clustering depending on the datatype
+    if inpt_data.iloc[0].geometry.type == 'Polygon':
+        points_xy = np.column_stack((inpt_data.geometry.centroid.x,
+                                     inpt_data.geometry.centroid.y))
+    if inpt_data.iloc[0].geometry.type in ['Point', 'LineString']:
+        points_xy = np.column_stack((inpt_data.geometry.x,
+                                     inpt_data.geometry.y))
     centroids, _ = kmeans(points_xy, clusters)
     # assign each sample to a cluster
     idx, _ = vq(points_xy, centroids)
     # add Cluster_ID to dataframe
-    inpt_data[cluster_fld_name] = idx
-    outpt_data = inpt_data
+    outpt_data = inpt_data[:]  # create a copy
+    outpt_data.insert(outpt_data.shape[1], cluster_fld_name, idx)
     print(clusters, ' cluster were created by k-mean method')
     return outpt_data
 
@@ -87,7 +91,7 @@ def PointsInCircum(center, radius, number_of_pnts):
     return np.asarray(circle_pnts)
 
 
-def create_circular_footprints(gdfin, crcl_radius=100,
+def point_to_circle(gdfin, crcl_radius=100,
                                number_of_points=10):
     """
     Create circles which cover the relevant geometry for geographic coordinat
@@ -98,8 +102,8 @@ def create_circular_footprints(gdfin, crcl_radius=100,
     circle_geom = [shapely.geometry.Polygon(zip(circle_cord[i][:, 0],
                                                 circle_cord[i][:, 1]))
                    for i in range(0, len(circle_cord))]
-    gdfin.geometry = circle_geom
-    gdfout = gdfin
+    gdfout = gdfin[:]
+    gdfout.geometry = circle_geom
     return gdfout
 
 def closest_point_of_neighbor_ring(polyg0, polyg1):
