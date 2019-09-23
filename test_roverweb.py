@@ -10,16 +10,18 @@ import roverweb as rw
 import geopandas as gpd
 # load our dataset as geodataframe
 gdfRover = rw.geometry.from_csv(
-    './testdata/Mueglitz-20190708_'
-    'selection.csv',
+    './testdata/Mueglitz-20190708_selection.csv',
     geomtrcol=['LongDec', 'LatDec'],
     src_crs={
         'init': 'epsg:4326'
     })
 # create a circular footprint (polygon) around the gps points
-gdfRover_polyg = rw.geometry.point_to_circle(
+gdfRover_circls = rw.geometry.points_to_circle(
     gdfRover, crcl_radius=100, number_of_points=10)
 
+# instead we can also create a true footprint which consideres that the rover is moving,
+# basically a parallelogram attached on both sides with two half circles
+gdfRover_polyg=rw.geometry.points_to_footprint(gdfRover,footprint_radius=50,crs_src = "epsg:4326",crs_dst = "epsg:25833",number_of_points=10,inpt_geo_type='Point')
 # Next is that we cluster our datasets in order to improve query speed
 clusters = 3  # number of clusters
 gdfRover_clust = rw.geometry.clustering(
@@ -88,3 +90,6 @@ except Exception as e:
 #finally we write out our results to an shapefile
 gdfRover_osm_sg.to_csv('./testdata/Mueglitz-20190708_'
                        'selection_roverweb.csv')
+
+gdfRover_osm_sg.to_file('./testdata/Mueglitz-20190708_'
+                       'selection_roverweb.shp')

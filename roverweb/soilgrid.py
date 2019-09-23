@@ -31,7 +31,7 @@ def apnd_from_wcs(inpt_data,
     if isinstance(inpt_data, str):
         inpt_data = gpd.read_file(inpt_data)
     # check source coordinate system and convert to EPSG 4326
-    src_epsg = inpt_data.crs.get('init')
+    src_epsg = inpt_data.crs
     if src_epsg != 'epsg:4326':
         inpt_data['geometry'] = inpt_data['geometry'].to_crs(epsg=4326)
         print('geometry converted to EPSG:4326 for processing')
