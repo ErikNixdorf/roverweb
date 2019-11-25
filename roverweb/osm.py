@@ -79,11 +79,13 @@ def querybound_generation(gdf_in):
 
 def apnd_from_overpass(gdfin, querybound,
                     queryfeatures={'way': ['landuse', 'highway']},
-                    value_in=None, value_out=None, CountValues=False):
+                    values_in=None, values_out=None, CountValues=False):
     """
     Get the queried features from the Overpass API
     # for documentation see https://wiki.openstreetmap.org/wiki/Overpass_API
     Currently supported for polygons only
+    values_in=either None or list of strings
+    values_out= either None or list of strings
     """
 
     # Connect to server
@@ -131,14 +133,16 @@ def apnd_from_overpass(gdfin, querybound,
                             1, inplace=True)
 
                 # delete entries if defined in value_out, e.g the service
-                if value_out is not None:
-                    gdfosm = gdfosm[gdfosm[key] != value_out]
+                if values_out is not None:
+                    for value_out in values_out:
+                        gdfosm = gdfosm[gdfosm[key] != value_out]
                 # if value in is defined we look for this value only in the key
-                if value_in is not None:
-                    gdfosm = gdfosm[gdfosm[key] == value_in]
-                    # in this case we have to rename the colfrom key to value
-                    gdfosm = gdfosm.rename(columns={key: value_in})
-                    key = value_in  # bad solution...
+                if values_in is not None:
+                    for value_in in values_in:                        
+                        gdfosm = gdfosm[gdfosm[key] == value_in]
+                        # in this case we have to rename the colfrom key to value
+                        gdfosm = gdfosm.rename(columns={key: value_in})
+                        key = value_in  # bad solution...
                 # add ID column to input data if not existing
                 if 'ID' not in gdfin.columns:
                     gdfin.insert(gdfin.shape[1], 'ID',

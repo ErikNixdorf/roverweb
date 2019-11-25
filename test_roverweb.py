@@ -10,7 +10,7 @@ import roverweb as rw
 import geopandas as gpd
 # load our dataset as geodataframe
 gdfRover = rw.geometry.from_csv(
-    './testdata/Mueglitz-20190708_selection.csv',
+    './testdata/Mueglitz-20190708.csv',
     geomtrcol=['LongDec', 'LatDec'],
     src_crs={
         'init': 'epsg:4326'
@@ -23,7 +23,7 @@ gdfRover_circls = rw.geometry.points_to_circle(
 # basically a parallelogram attached on both sides with two half circles
 gdfRover_polyg=rw.geometry.points_to_footprint(gdfRover,footprint_radius=50,crs_src = "epsg:4326",crs_dst = "epsg:25833",number_of_points=10,inpt_geo_type='Point')
 # Next is that we cluster our datasets in order to improve query speed
-clusters = 3  # number of clusters
+clusters = 8  # number of clusters
 gdfRover_clust = rw.geometry.clustering(
     gdfRover_polyg, clusters=clusters, cluster_fld_name='ClusterID')
 # %%having our clustered dataset we can run our osm to get desired secondary
@@ -50,13 +50,13 @@ for cluster_no in range(0, clusters):
         gdfRover_subset,
         querygeobound,
         queryfeatures={'way': ['highway']},
-        value_out='service')
+        values_out=['service','footway'])
     # query only trees in landuse and count the no of feature
     gdfRover_subset = rw.osm.apnd_from_overpass(
         gdfRover_subset,
         querygeobound,
         queryfeatures={'node': ['natural']},
-        value_in='tree',
+        values_in=['tree'],
         CountValues=True)
     # append subset back to entire dataset
     gdfRover_osm = gdfRover_osm.append(gdfRover_subset)
@@ -88,8 +88,8 @@ except Exception as e:
     print('No DWD Station data retrieved')
 
 #finally we write out our results to an shapefile
-gdfRover_osm_sg.to_csv('./testdata/Mueglitz-20190708_'
+gdfRover_osm_sg.to_csv('./output/Mueglitz-20190708_'
                        'selection_roverweb.csv')
 
-gdfRover_osm_sg.to_file('./testdata/Mueglitz-20190708_'
+gdfRover_osm_sg.to_file('./output/Mueglitz-20190708_'
                        'selection_roverweb.shp')
