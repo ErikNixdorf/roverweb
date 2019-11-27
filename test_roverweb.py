@@ -59,7 +59,7 @@ for cluster_no in range(0, clusters):
         values_in=['tree'],
         CountValues=True)
     # append subset back to entire dataset
-    gdfRover_osm = gdfRover_osm.append(gdfRover_subset)
+    gdfRover_osm = gdfRover_osm.append(gdfRover_subset,sort=True)
 
 # %% Next we add data from soilgrid_network from wcs (faster than restapi)
 gdfRover_osm_sg = rw.soilgrid.apnd_from_wcs(
@@ -79,9 +79,10 @@ gdfRover_osm_sg_2 = rw.weather.apnd_dwd_stationdata(
     gdfRover_osm_sg.copy(),
     time_col='Date Time(UTC)',
     time_format='%Y-%m-%d %H:%M:%S',
-    parameters=['airtemp_humidity'],
+    data_category=['air_temperature'],
+    parameters=['airtemp_humidity','airtemp_temperature'],
     temp_resolution='hourly',
-    fixed_network=True)
+    no_of_nearest_stations=3)    
 
 #finally we write out our results to an shapefile
 gdfRover_osm_sg_2.to_csv('./output/Mueglitz-20190708_'

@@ -17,7 +17,6 @@ import shapely
 from shapely.ops import nearest_points
 from shapely.geometry import LineString, Point, Polygon, MultiPolygon
 from scipy.cluster.vq import kmeans, vq
-from matplotlib import pyplot
 
 
 def from_csv(inpt_data,
