@@ -342,9 +342,13 @@ def apnd_dwd_stationdata(inpt_data,
             query_result = dw.query(
                 station_id=station_id, timestamp=row[time_col])
             # extract the requested parameter from the entire data
-            for i in range(0, len(parameters)):
-                result_matrix[ii, i] = query_result[parameters[i]] * (
-                    1 / station_dist**2)
+            for i in range(0, len(parameters)):                
+                try:
+                    result_matrix[ii,i]=query_result[parameters[i]]*(1/station_dist**2)
+                except Exception:
+                    print('Station', station_id, 'not available at date', row[time_col].date())
+                    station_dist=100000000
+                    result_matrix[ii,i]=(1/station_dist**2)
             ii += 1
             inverse_dist += (1 / station_dist**2)
         row[parameters] = np.sum(result_matrix, axis=0) / inverse_dist
