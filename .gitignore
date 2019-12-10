@@ -5,3 +5,4 @@ __pycache__
 /output/
 /roverweb/dwdweather_mod/
 /roverweb/tables/old/
+/roverweb/dbase/*
