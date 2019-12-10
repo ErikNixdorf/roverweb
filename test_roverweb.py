@@ -60,10 +60,20 @@ for cluster_no in range(0, clusters):
         CountValues=True)
     # append subset back to entire dataset
     gdfRover_osm = gdfRover_osm.append(gdfRover_subset,sort=True)
-
-# %% Next we add data from soilgrid_network from wcs (faster than restapi)
-gdfRover_osm_sg = rw.soilgrid.apnd_from_wcs(
+    
+# Finally we get humidity values from dwd data, 
+gdfRover_osm_sg = rw.weather.apnd_dwd_stationdata(
     gdfRover_osm.copy(),
+     time_col='Date Time(UTC)',
+     data_time_format='%Y-%m-%d %H:%M:%S',
+     dwd_time_format='%Y%m%d%H',
+     data_category='air_temperature',
+     parameters=['2m_air_temperature','2m_relative_humidity'],
+     temp_resolution='hourly',
+     no_of_nearest_stations=4)   
+# %% Next we add data from soilgrid_network from wcs (faster than restapi)
+gdfRover_osm_sg2 = rw.soilgrid.apnd_from_wcs(
+    gdfRover_osm_sg.copy(),
     soilgridlrs={
         'sg250m:ORCDRC_M_sl1_250m': 'ORCDRC_sl1',
         'sg250m:BLDFIE_M_sl1_250m': 'BLDFIE_sl1',
@@ -74,15 +84,7 @@ gdfRover_osm_sg = rw.soilgrid.apnd_from_wcs(
     all_touched=True,
     output=None)
 
-# Finally we get humidity values from dwd data, 
-gdfRover_osm_sg_2 = rw.weather.apnd_dwd_stationdata(
-    gdfRover_osm_sg.copy(),
-    time_col='Date Time(UTC)',
-    time_format='%Y-%m-%d %H:%M:%S',
-    data_category=['air_temperature'],
-    parameters=['airtemp_humidity','airtemp_temperature'],
-    temp_resolution='hourly',
-    no_of_nearest_stations=3)    
+
 
 #finally we write out our results to an shapefile
 gdfRover_osm_sg_2.to_csv('./output/Mueglitz-20190708_'
