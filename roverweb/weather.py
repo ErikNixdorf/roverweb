@@ -251,7 +251,11 @@ def dwd_age_test(date):
 
 
 #%% We start to connect to dwd server and download
-def import_stations(time_res='hourly',time_format='%Y%m%d%H',campaign_time=datetime(2018,12,9,0,0),data_category='air_temperature',station_ids=['00044','00091'],dbase_dir='dbase',table_dir='tables',Output='True'):
+def import_stations(time_res='hourly',time_format='%Y%m%d%H',
+                    campaign_time=[datetime(2018,12,9), datetime(2018,12,12)],
+                    data_category='air_temperature', station_ids=['00044','00091'],
+                    dbase_dir='dbase', table_dir='tables',Output='True',
+                    memory_save=True):
     """
     Imports stations to the existing netcdf database
     Warning: Currently, the only way to update the database for existing
@@ -264,9 +268,8 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',campaign_time=datet
     #connect to server
     server='opendata.dwd.de'
     ftp=connect_ftp(server = server,connected = False)
-    
-    
-    
+    #get the mean time of the campaign
+    date_mean=campaign_time[0]+(campaign_time[1]-campaign_time[0])/2   
     # load the inititial ds
     dbase_path=dbase_dir+'\\db_stations_'+time_res+'.nc'
     if os.path.exists(dbase_path):
@@ -277,12 +280,11 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',campaign_time=datet
         #get a variable from the category
         test_variable=list(dwd_datasets_meta[data_category].values())[1]
         #get the non_nans stations
-        current_stations=np.array(dwd_dbase[test_variable].sel(time=campaign_time,method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
+        current_stations=np.array(dwd_dbase[test_variable].sel(time=date_mean,method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
     else:
         print(dbase_path, 'does not exist, we create a new netcdf_file')
         dwd_dbase=xr.Dataset()
         current_stations=np.array((-9999)).reshape(1)
-        Output='True'    
     #change directory on server
     for timerange in timeranges:
         archive_url='/climate_environment/CDC/observations_germany/climate/' + time_res +'/'+data_category+'/'+timerange       
@@ -293,7 +295,11 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',campaign_time=datet
             if int(station_id) in current_stations:
                 print('Station', station_id, 'with category', data_category,'in ',timerange,'dbase already')
                 continue
-            archive_name=[s for s in ftp.nlst() if station_id in s][0]
+            try:
+                archive_name=[s for s in ftp.nlst() if station_id in s][0]
+            except:
+                print('No ',timerange,'data for station',station_id)
+                continue
             print('Retrieving {}...'.format(archive_name))
             retrieved = False
             archive = io.BytesIO()
@@ -323,6 +329,12 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',campaign_time=datet
             #append to database
             dwd_xr=dwd_product.to_xarray()
             dwd_xr=dwd_xr.fillna(-999)
+            #only add relevant dates if available memoryis rather small
+            
+            if memory_save and timerange=='historical':
+                dwd_xr=dwd_xr.sel(time=slice(campaign_time[0]-timedelta(days=1),campaign_time[1]+timedelta(days=1)))
+                #dwd_xr=dwd_xr.squeeze()
+            
             try:
                 dwd_dbase=xr.merge([dwd_dbase,dwd_xr])
             except Exception as e:
@@ -342,7 +354,9 @@ def apnd_dwd_stationdata(inpt_data,
                          data_category='air_temperature',
                          parameters=['2m_air_temperature','2m_relative_humidity'],
                          temp_resolution='hourly',
-                         no_of_nearest_stations=4):
+                         no_of_nearest_stations=4,
+                         Output='True',
+                         memory_save=True):
     """
     The Main function which is written from skretch and uses an netcdf database
     Run for each category individually
@@ -359,12 +373,10 @@ def apnd_dwd_stationdata(inpt_data,
     #define the database folder
     pypath = os.path.dirname(os.path.abspath(__file__))
     table_dir = pypath + '\\' + 'tables'
-    dbase_dir = pypath + '\\' + 'tables'
+    dbase_dir = pypath + '\\' + 'dbase'
     # next we convert our date to a datetime object
     inpt_data[time_col] = pd.to_datetime(
-        inpt_data[time_col], format=data_time_format)
-    #get the mean time of the campaign
-    date_mean=inpt_data[time_col].min()+(inpt_data[time_col].max()-inpt_data[time_col].min())/2
+        inpt_data[time_col], format=data_time_format)    
     #%% we check all available stations and create a valid list
     filename_stations=update_stationlist(time_res='hourly',dbase_dir=table_dir)
     stations_all=pd.read_csv(filename_stations, dtype={'STATIONS_ID': object})
@@ -389,7 +401,7 @@ def apnd_dwd_stationdata(inpt_data,
     id_dwd_stations=list(set(sum(id_nearest_stations,[])))
     
     #update the database
-    db_dwd_stations=import_stations(time_res=temp_resolution,time_format=dwd_time_format,campaign_time=datetime.fromtimestamp(date_mean.timestamp()),data_category=data_category,station_ids=id_dwd_stations,dbase_dir=dbase_dir,Output='True',table_dir=table_dir)
+    db_dwd_stations=import_stations(time_res=temp_resolution,time_format=dwd_time_format,campaign_time=[inpt_data[time_col].min(),inpt_data[time_col].max()],data_category=data_category,station_ids=id_dwd_stations,dbase_dir=dbase_dir,Output=Output,table_dir=table_dir,memory_save=memory_save)
     
     #distance of nearest stattions
     dist_nearest_stations=pd.DataFrame(np.sort(distances.values)[:,:no_of_nearest_stations]).values.tolist() #distances themself
@@ -413,7 +425,10 @@ def apnd_dwd_stationdata(inpt_data,
         inverse_dist=0
         result_matrix=np.zeros((no_of_nearest_stations,len(parameters)))
         inverse_dist=np.zeros((len(parameters)))
-        for station_id, station_dist in dict(row['nearest_stations']).items():        
+        for station_id, station_dist in dict(row['nearest_stations']).items():
+            #replace if distance is zero (can happen if device is at weather station the value with a value one digit smaller then GPS precision
+            if station_dist==0:
+                station_dist=0.0001
             query_result=db_dwd_stations.sel(STATIONS_ID=int(station_id), time=row[time_col],method='nearest')
             # extract the requested parameter from the entire data              
             for i in range(0,len(parameters)):

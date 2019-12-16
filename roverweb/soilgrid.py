@@ -12,12 +12,53 @@ from rasterio.io import MemoryFile
 import rasterstats
 import geopandas as gpd
 import requests
+import time
+def connect_wcs(server = 'https://data.isric.org/geoserver/ows',version='1.0.0',connected=False,trials=1):
+    trial=0
+    while not connected:
+        if trial>=trials:
+            print('Maximum connection tests of', trials, 'reached')
+            return None
+        try:
+            wcs = WebCoverageService(server,
+                             version=version)
+            connected = True
+    
+        except:
+            time.sleep(1)
+            print('Reconnect to Server after 5 seconds')
+            trial+=1
+            pass
+    return wcs
 
 
 def apnd_from_wcs(inpt_data,
                           soilgridlrs={'sg250m:ORCDRC_M_sl1_250m': 'ORCDRC_sl1',
                                        'sg250m:BLDFIE_M_sl1_250m': 'BLDFIE_sl1',
-                                       'sg250m:CLYPPT_M_sl1_250m': 'CLYPPT_sl1'},
+                                       'sg250m:PHIHOX_M_sl1_250m': 'PHIHOX_sl1',
+                                       'sg250m:SNDPPT_M_sl1_250m': 'SNDPPT_sl1',
+                                       'sg250m:SLTPPT_M_sl1_250m': 'SLTPPT_sl1',
+                                       'sg250m:CLYPPT_M_sl1_250m': 'CLYPPT_sl1',
+                                       'sg250m:CRFVOL_M_sl1_250m': 'CRFVOL_sl1',
+                                       'sg250m:CECSOL_M_sl1_250m': 'CECSOL_sl1',
+                                       'sg250m:ORCDRC_M_sl2_250m': 'ORCDRC_sl2',
+                                       'sg250m:BLDFIE_M_sl2_250m': 'BLDFIE_sl2',
+                                       'sg250m:PHIHOX_M_sl2_250m': 'PHIHOX_sl2',
+                                       'sg250m:SNDPPT_M_sl2_250m': 'SNDPPT_sl2',
+                                       'sg250m:SLTPPT_M_sl2_250m': 'SLTPPT_sl2',
+                                       'sg250m:CLYPPT_M_sl2_250m': 'CLYPPT_sl2',
+                                       'sg250m:CRFVOL_M_sl2_250m': 'CRFVOL_sl2',
+                                       'sg250m:CECSOL_M_sl2_250m': 'CECSOL_sl2',
+                                       'sg250m:ORCDRC_M_sl3_250m': 'ORCDRC_sl3',
+                                       'sg250m:BLDFIE_M_sl3_250m': 'BLDFIE_sl3',
+                                       'sg250m:PHIHOX_M_sl3_250m': 'PHIHOX_sl3',
+                                       'sg250m:SNDPPT_M_sl3_250m': 'SNDPPT_sl3',
+                                       'sg250m:SLTPPT_M_sl3_250m': 'SLTPPT_sl3',
+                                       'sg250m:CLYPPT_M_sl3_250m': 'CLYPPT_sl3',
+                                       'sg250m:CRFVOL_M_sl3_250m': 'CRFVOL_sl3',
+                                       'sg250m:CECSOL_M_sl3_250m': 'CECSOL_sl3',
+                                       'sg250m:BDTICM_M_250m': 'BDTICM',
+                                       },
                           raster_res=(250, 250), statistical_metric=['mean'],
                           all_touched=True, output=None):
     """
@@ -26,6 +67,7 @@ def apnd_from_wcs(inpt_data,
     raster_resolution= (longitudinal_res in m, latitudinal_res in m)
     gdf: Can be either a geodataframe or a shapefile, if shapefile it will be
     converted to
+    #https://www.isric.org/explore/soilgrids/faq-soilgrids
     """
     # First, if dataset is shapefile, we read it to geodataframe
     if isinstance(inpt_data, str):
@@ -36,8 +78,7 @@ def apnd_from_wcs(inpt_data,
         inpt_data['geometry'] = inpt_data['geometry'].to_crs(epsg=4326)
         print('geometry converted to EPSG:4326 for processing')
     # contact the wcs
-    wcs = WebCoverageService('https://data.isric.org/geoserver/ows',
-                             version='1.0.0')
+    wcs = connect_wcs(server = 'https://data.isric.org/geoserver/ows',version='1.0.0',connected=False)
     # check whether all layers are required
     if soilgridlrs is None:
         lrs_avlbl = list(wcs.contents)

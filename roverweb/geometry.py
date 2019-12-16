@@ -259,7 +259,8 @@ def points_to_footprint(inpt_data,
         try:
             polyg_pair = MultiPolygon([crlc_plgns[idpnt - 1], crlc_plgns[idpnt]])
         except:
-            print('not_ok')
+            #print('test with iloc')
+            polyg_pair = MultiPolygon([crlc_plgns.iloc[idpnt - 1], crlc_plgns.iloc[idpnt]])
         polyg_pair = gpd.GeoSeries(polyg_pair)
         polyg_hull = polyg_pair.convex_hull
 
@@ -271,7 +272,7 @@ def points_to_footprint(inpt_data,
     # Finally we replace all geometries of the original file with the new one and save
     outpt_data = inpt_data.copy(deep=True)
     #delete the first row
-    outpt_data = outpt_data.drop(0, axis=0)
+    outpt_data = outpt_data.iloc[1:]
     #add new geometry
     outpt_data['geometry'] = footprnt_geomrts
     # convert coordinate system back

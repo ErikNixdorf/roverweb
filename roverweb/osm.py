@@ -87,7 +87,11 @@ def apnd_from_overpass(gdfin, querybound,
     values_in=either None or list of strings
     values_out= either None or list of strings
     """
-
+    def divide_chunks(l, n): 
+      
+    # looping till length l 
+        for i in range(0, len(l), n):  
+            yield l[i:i + n] 
     # Connect to server
     api = overpass.API(timeout=2000)
 
@@ -119,37 +123,50 @@ def apnd_from_overpass(gdfin, querybound,
                           'and key ', key,)
                     gdfin[element[0] + '_' + key] = np.nan
                     continue
-                # convert to geodataframe
-                gdfosm = gpd.GeoDataFrame.from_features(osm_retrieved,
-                                                        crs={'init':
-                                                             'epsg:4326'})
-                if element is 'way':
-                    # delete all points
-                    gdfosm = gdfosm[gdfosm.geom_type != "Point"]
-
-                # drop all columns except of the relevant key
-                retained_columns = ['geometry', key]
-                gdfosm.drop(gdfosm.columns.difference(retained_columns),
-                            1, inplace=True)
-
-                # delete entries if defined in value_out, e.g the service
-                if values_out is not None:
-                    for value_out in values_out:
-                        gdfosm = gdfosm[gdfosm[key] != value_out]
-                # if value in is defined we look for this value only in the key
+                # convert to geodataframe, if to many information do it in chunks otherwise memory error may occur
+                chunk_length=10000
+                osm_retrieved_chunks=list(divide_chunks(osm_retrieved['features'], chunk_length))
+                gdfosm=gpd.GeoDataFrame()
+                for osm_retrieved_chunk in osm_retrieved_chunks:
+                    gdfosm_chunk = gpd.GeoDataFrame.from_features(osm_retrieved_chunk,
+                                                            crs={'init':
+                                                                 'epsg:4326'})                    
+                    if element is 'way':
+                        # delete all points
+                        gdfosm_chunk = gdfosm_chunk[gdfosm_chunk.geom_type != "Point"]
+    
+                    # drop all columns except of the relevant key
+                    retained_columns = ['geometry', key]
+                    gdfosm_chunk.drop(gdfosm_chunk.columns.difference(retained_columns),
+                                1, inplace=True)
+    
+                    # delete entries if defined in value_out, e.g the service
+                    if values_out is not None:
+                        for value_out in values_out:
+                            gdfosm_chunk = gdfosm_chunk[gdfosm_chunk[key] != value_out]
+                    # if value in is defined we look for this value only in the key
+                    if values_in is not None:
+                        for value_in in values_in:
+                            gdfosm_chunk = gdfosm_chunk[gdfosm_chunk[key] == value_in]
+                            # in this case we have to rename the colfrom key to value
+                            gdfosm_chunk = gdfosm_chunk.rename(columns={key: value_in})
+                              # bad solution...
+                    #add together
+                    gdfosm=gdfosm.append(gdfosm_chunk,ignore_index=True)
+                #overwrite key and value_in if not None
                 if values_in is not None:
-                    for value_in in values_in:                        
-                        gdfosm = gdfosm[gdfosm[key] == value_in]
-                        # in this case we have to rename the colfrom key to value
-                        gdfosm = gdfosm.rename(columns={key: value_in})
-                        key = value_in  # bad solution...
+                    key = value_in
                 # add ID column to input data if not existing
                 if 'ID' not in gdfin.columns:
                     gdfin.insert(gdfin.shape[1], 'ID',
                                  range(0, gdfin.shape[0]))
                 # join with inout gdf
-                gdfjoined = gpd.tools.sjoin(gdfin, gdfosm, how='left')
-
+                try:
+                    gdfjoined = gpd.tools.sjoin(gdfin, gdfosm, how='left')
+                except Exception as e: # happens if all entrys are defined as values out
+                    print(e)
+                    gdfjoined=gdfin.copy()
+                    gdfjoined[key]=None
                 # if the number of entries larger than the No of TrackPoints,
                 # we need to sum and find maxmimum
                 if gdfjoined.shape[0] > gdfin.shape[0]:
