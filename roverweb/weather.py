@@ -39,6 +39,22 @@ import json
 import xarray as xr
 from zipfile import ZipFile
 import io
+import sys
+
+def findkeys(node, kv):
+    """
+    from https://stackoverflow.com/questions/9807634/find-all-occurrences-of-a-key-in-nested-dictionaries-and-lists
+    """
+    if isinstance(node, list):
+        for i in node:
+            for x in findkeys(i, kv):
+               yield x
+    elif isinstance(node, dict):
+        if kv in node:
+            yield node[kv]
+        for j in node.values():
+            for x in findkeys(j, kv):
+                yield x
 
 def connect_ftp(server = 'opendata.dwd.de',connected=False):
     while not connected:
@@ -254,7 +270,7 @@ def dwd_age_test(date):
 def import_stations(time_res='hourly',time_format='%Y%m%d%H',
                     campaign_time=[datetime(2018,12,9), datetime(2018,12,12)],
                     data_category='air_temperature', station_ids=['00044','00091'],
-                    dbase_dir='dbase', table_dir='tables',Output='True',
+                    dbase_dir='dbase', table_dir='tables',Output=True,
                     memory_save=True):
     """
     Imports stations to the existing netcdf database
@@ -263,31 +279,61 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
     WARNING: Import does not seems to be perfect, sometimes double import         
     """
     timeranges=['recent','historical']
-    #load the datasets available at each timestep
-    dwd_datasets_meta=json.load(open(table_dir+"\\dwd_station_meta_"+time_res+".txt"))
+    #%%load the datasets available at each timestep
+    dwd_datasets_meta=dwd_datasets_meta=json.load(open(table_dir+"\\dwd_station_meta.txt"))
+    #try to get a variable from the category, otherwise use interpolation of higher frequency data
+    resample_frequency=None
+    time_res_dbase=time_res
+    try:
+        dwd_datasets_meta[time_res][data_category]
+    except Exception:
+        if time_res=='daily':
+            try:
+              dwd_datasets_meta['hourly'][data_category]
+              print(data_category,' is not provided at the required resolution, daily_mean of hourly data used instead')
+              resample_frequency='D'
+              time_res_dbase='hourly'
+            except Exception:
+                try: 
+                    dwd_datasets_meta['10_minutes'][data_category]
+                    print(data_category,' is not provided at the required resolution, daily_mean of 10_minutes data used instead')
+                    resample_frequency='D'
+                    time_res_dbase='10_minutes'
+                except Exception:
+                    print(data_category, 'not available')
+                    sys.exit(1)
+        if time_res=='hourly':
+            try: 
+                dwd_datasets_meta['10_minutes'][data_category]
+                print(data_category,' is not provided at the required resolution, hourly_mean of 10_minutes data used instead')
+                resample_frequency='H'
+                time_res_dbase='10_minutes'
+            except Exception:
+                print(data_category, 'not available')
+                sys.exit(1)
+    
+    
+    #%% download from dwd if necessary
     #connect to server
     server='opendata.dwd.de'
     ftp=connect_ftp(server = server,connected = False)
     #get the mean time of the campaign
     date_mean=campaign_time[0]+(campaign_time[1]-campaign_time[0])/2   
     # load the inititial ds
-    dbase_path=dbase_dir+'\\db_stations_'+time_res+'.nc'
+    dbase_path=dbase_dir+'\\db_stations_'+time_res+'_'+data_category+'.nc'
     if os.path.exists(dbase_path):
         with xr.open_dataset(dbase_path) as dwd_dbase:
             dwd_dbase.load()
             print('Existing database imported')
-        # get overview about current stations
-        #get a variable from the category
-        test_variable=list(dwd_datasets_meta[data_category].values())[1]
-        #get the non_nans stations
-        current_stations=np.array(dwd_dbase[test_variable].sel(time=date_mean,method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
+         #get the non_nans stations
+        current_stations=np.array(dwd_dbase[list(dwd_dbase.keys())[0]].sel(time=date_mean,method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
     else:
         print(dbase_path, 'does not exist, we create a new netcdf_file')
         dwd_dbase=xr.Dataset()
         current_stations=np.array((-9999)).reshape(1)
     #change directory on server
     for timerange in timeranges:
-        archive_url='/climate_environment/CDC/observations_germany/climate/' + time_res +'/'+data_category+'/'+timerange       
+        archive_url='/climate_environment/CDC/observations_germany/climate/'+time_res_dbase+'/'+data_category+'/'+timerange       
         ftp.cwd(archive_url)
         #get the archive
         for station_id in station_ids:
@@ -322,7 +368,7 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
             dwd_product=pd.read_csv(product,sep=';',skipinitialspace=True)
             #get datetime
             dwd_product['time']=pd.to_datetime(dwd_product['MESS_DATUM'],format=time_format)    
-            dwd_product=dwd_product.rename(columns=dwd_datasets_meta[data_category])
+            dwd_product=dwd_product.rename(columns=dwd_datasets_meta[time_res_dbase][data_category])
             dwd_product=dwd_product.reset_index()
             dwd_product=dwd_product.set_index(['time','STATIONS_ID'])
             dwd_product=dwd_product.drop(columns=['MESS_DATUM','quality_level_of_next_columns','end_of_record','index'])
@@ -342,21 +388,24 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
                 print('try merging with compat=override')
                 dwd_dbase=xr.merge([dwd_dbase,dwd_xr],compat='override')
             print(archive_name,' added to database')
-    if Output:
+    #upscale to required temporal resolution
+    if resample_frequency is not None:
+        dwd_dbase=dwd_dbase.resample(time=resample_frequency).mean()
+        print('DWD data upscaled to',time_res,'averages')
+    if Output==True:
         dwd_dbase.to_netcdf(dbase_path)
         print('Updated database' ,dbase_path)
     return dwd_dbase
 #%% Start the main function
-def apnd_dwd_stationdata(inpt_data,
-                         time_col='Date Time(UTC)',
-                         data_time_format='%Y-%m-%d %H:%M:%S',
+def Find_nearest_dwd_stations(inpt_data,
+                         date_start='20051201',
+                         date_end='20201231',
                          dwd_time_format='%Y%m%d%H',
                          data_category='air_temperature',
-                         parameters=['2m_air_temperature','2m_relative_humidity'],
                          temp_resolution='hourly',
                          no_of_nearest_stations=4,
-                         Output='True',
-                         memory_save=True):
+                         memory_save=True,
+                         Output='True'):
     """
     The Main function which is written from skretch and uses an netcdf database
     Run for each category individually
@@ -367,16 +416,15 @@ def apnd_dwd_stationdata(inpt_data,
                 'Currently only one dwd category allowed, please run function multiple times for each category'
             )
             return None
+        
+    #convert time to datetime
+    dt_start=datetime.strptime(date_start,'%Y%m%d')
+    dt_end=datetime.strptime(date_end,'%Y%m%d')
     print('Start quering data from DWD')
-    # Define outpt_data
-    outpt_data = gpd.GeoDataFrame()
     #define the database folder
     pypath = os.path.dirname(os.path.abspath(__file__))
     table_dir = pypath + '\\' + 'tables'
-    dbase_dir = pypath + '\\' + 'dbase'
-    # next we convert our date to a datetime object
-    inpt_data[time_col] = pd.to_datetime(
-        inpt_data[time_col], format=data_time_format)    
+    dbase_dir = pypath + '\\' + 'dbase'    
     #%% we check all available stations and create a valid list
     filename_stations=update_stationlist(time_res='hourly',dbase_dir=table_dir)
     stations_all=pd.read_csv(filename_stations, dtype={'STATIONS_ID': object})
@@ -386,7 +434,7 @@ def apnd_dwd_stationdata(inpt_data,
     dwd_stations['date_end']=pd.to_datetime(stations_all.date_end,format='%Y%m%d')
     dwd_stations['date_start']=pd.to_datetime(stations_all.date_start,format='%Y%m%d')
     # clean to stations which cover the campaign time #dt_low <= dt <= dt_high:
-    dwd_stations=dwd_stations[(dwd_stations.date_start<=inpt_data[time_col].min()) & (dwd_stations.date_end>=inpt_data[time_col].max())]
+    dwd_stations=dwd_stations[(dwd_stations.date_start<=dt_start) & (dwd_stations.date_end>=dt_end)]
     #make a geodataframe out of it
     dwd_stations=gpd.GeoDataFrame(dwd_stations,geometry=gpd.points_from_xy(dwd_stations.geo_lon, dwd_stations.geo_lat))
     
@@ -401,49 +449,61 @@ def apnd_dwd_stationdata(inpt_data,
     id_dwd_stations=list(set(sum(id_nearest_stations,[])))
     
     #update the database
-    db_dwd_stations=import_stations(time_res=temp_resolution,time_format=dwd_time_format,campaign_time=[inpt_data[time_col].min(),inpt_data[time_col].max()],data_category=data_category,station_ids=id_dwd_stations,dbase_dir=dbase_dir,Output=Output,table_dir=table_dir,memory_save=memory_save)
+    db_dwd_stations=import_stations(time_res=temp_resolution,time_format=dwd_time_format,campaign_time=[dt_start,dt_end],data_category=data_category,station_ids=id_dwd_stations,dbase_dir=dbase_dir,Output=Output,table_dir=table_dir,memory_save=memory_save)
     
     #distance of nearest stattions
     dist_nearest_stations=pd.DataFrame(np.sort(distances.values)[:,:no_of_nearest_stations]).values.tolist() #distances themself
-    #write it together to a dictionary
-    inpt_data['nearest_stations']=[dict(zip(id_nearest_stations[i], dist_nearest_stations[i])) for i in range(0,len(id_nearest_stations))]
+    #create new columns in the input data
+    station_col_nm=list()
+    for i in range(0,no_of_nearest_stations):
+        station_col_nm.append('station_'+str(i))
+    for i in range(0,no_of_nearest_stations):
+        station_col_nm.append('distance_'+str(i))
+    #create new dataframe
+    distance_data=pd.concat([pd.DataFrame(id_nearest_stations).astype(int),pd.DataFrame(dist_nearest_stations)],axis=1)
+    distance_data.columns=station_col_nm
+    #add to main dataset
+    inpt_data=pd.concat([inpt_data, distance_data],axis=1)    
     
+    return inpt_data,db_dwd_stations
+
+def Apnd_dwd_data(inpt_data,dwd_dbase,
+                         time_col='Date Time(UTC)',
+                         data_time_format='%Y-%m-%d %H:%M:%S',
+                         parameters=['2m_air_temperature','2m_relative_humidity'],
+                         no_of_nearest_stations=3): 
     print('Start quering data from DWD and using IDW algorithm for parameter interpolation')
+    # convert input time 
+    inpt_data[time_col] = pd.to_datetime(
+        inpt_data[time_col], format=data_time_format)
     
+    # create output datasets
+    output= gpd.GeoDataFrame(inpt_data[['Date Time(UTC)','geometry']])
     #add additional columns to the inpt data
+    inverse_dist=np.zeros((len(inpt_data),3))
+    for i in range (0,no_of_nearest_stations):
+        inverse_dist[:,i]=(1/inpt_data['distance_'+str(i)]**2) 
     for parameter in parameters:
-        inpt_data[parameter]=-9999
-    #%% Add data from database  
-    # Define outpt_data
-    outpt_data = gpd.GeoDataFrame()
-    #loop trough all lines to get the parameterset and apply idw #http://www.gitta.info/ContiSpatVar/en/html/Interpolatio_learningObject2.xhtml
-    for _,row in inpt_data.iterrows():
-        # get the information of the nearest stations
-        # query for result
-        ii=0
-        #creating result array  and inverse distance
-        inverse_dist=0
-        result_matrix=np.zeros((no_of_nearest_stations,len(parameters)))
-        inverse_dist=np.zeros((len(parameters)))
-        for station_id, station_dist in dict(row['nearest_stations']).items():
+        inpt_data[parameter]=-9999   
+        #calculate the result for each matrix
+        result_matrix=np.zeros((no_of_nearest_stations,len(inpt_data)))            
+        #loop over all the available stations
+        for i in range (0,no_of_nearest_stations):
+            station_data=dwd_dbase[parameter].sel(STATIONS_ID=xr.DataArray(inpt_data['station_'+str(i)]), time=xr.DataArray(inpt_data[time_col])).values
+            #http://xarray.pydata.org/en/stable/indexing.html                
+            #check for nan values
+            station_data[np.where(station_data==-999)]=np.nan
+            #replace distance to 100000 if value is nan
+            inpt_data.loc[np.isnan(station_data),'distance_'+str(i)]=10000000
             #replace if distance is zero (can happen if device is at weather station the value with a value one digit smaller then GPS precision
-            if station_dist==0:
-                station_dist=0.0001
-            query_result=db_dwd_stations.sel(STATIONS_ID=int(station_id), time=row[time_col],method='nearest')
-            # extract the requested parameter from the entire data              
-            for i in range(0,len(parameters)):
-                #if value is -999 we make it nan, dwd definition
-                if query_result[parameters[i]]==-999 or np.isnan(query_result[parameters[i]]) :
-                    result_matrix[ii,i]=np.nan
-                    
-                else:
-                    result_matrix[ii,i]=query_result[parameters[i]]*(1/station_dist**2)
-                    inverse_dist[i]+=(1/station_dist**2)     
-            ii+=1
-        row[parameters]=np.nansum(result_matrix,axis=0)/inverse_dist
-    # append datasets
-        outpt_data = outpt_data.append(row)
-    #delete the nearest station information
-    outpt_data.drop(columns='nearest_stations',inplace=True)
-    print('finished quering data from DWD')
-    return outpt_data
+            inpt_data.loc[station_data==0,'distance_'+str(i)]=0.00000001
+            #add inverse distances in dependence on the data
+            inverse_dist[:,i]=(1/inpt_data['distance_'+str(i)]**2)
+            # get the column for inverse distances
+            inverse_dist[:,i]=(1/inpt_data['distance_'+str(i)]**2) 
+            #depending whether there is data or not, 
+            result_matrix[i,:]=np.array(station_data*(1/inpt_data['distance_'+str(i)]**2))
+        #add to new columns
+        output[parameter]=np.nansum(result_matrix,axis=0)/inverse_dist.sum(axis=1)
+    print('Finished querying from DWD')
+    return output
