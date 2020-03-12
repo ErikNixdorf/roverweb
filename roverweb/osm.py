@@ -8,7 +8,7 @@ import numpy as np
 from scipy.spatial import ConvexHull
 import geopandas as gpd
 import overpass  # Server Communication with OSM
-
+from shapely.geometry import shape
 
 def getPolyCoords(gdf_in, row):
     """Returns the coordinates ('x|y') of edges/vertices of a Polygon/others
@@ -127,13 +127,34 @@ def apnd_from_overpass(gdfin, querybound,
                 chunk_length=10000
                 osm_retrieved_chunks=list(divide_chunks(osm_retrieved['features'], chunk_length))
                 gdfosm=gpd.GeoDataFrame()
+                def test_valid_geometry(f):
+                    try: 
+                        shape(f)
+                        valid_geo=True
+                    except:
+                        valid_geo=False
+                    return valid_geo
+                    
                 for osm_retrieved_chunk in osm_retrieved_chunks:
+                    #only consider elements with valid geometry
+                    #for osm_retrieved in osm_retrieved_chunk:
+                        #try:
+                        #   d = {"geometry": shape(osm_retrieved["geometry"]) if osm_retrieved["geometry"] else None}
+                        #except:
+                        #    print('does not work')
+                    #Linestrings need to have two points
+                    osm_retrieved_chunk[:] = [x for x in osm_retrieved_chunk if test_valid_geometry(x["geometry"]) is True ]
+                    
+                    #try:
+                    #    d = {"geometry": shape(osm_retrieved_chunks["geometry"]) if osm_retrieved_chunks["geometry"] else None}
+                    #except:
+                    #    print('Problem appeared')
                     gdfosm_chunk = gpd.GeoDataFrame.from_features(osm_retrieved_chunk,
-                                                            crs={'init':
-                                                                 'epsg:4326'})                    
-                    if element is 'way':
+                                                            crs='epsg:4326')                    
+                    if element == 'way':
                         # delete all points
                         gdfosm_chunk = gdfosm_chunk[gdfosm_chunk.geom_type != "Point"]
+
     
                     # drop all columns except of the relevant key
                     retained_columns = ['geometry', key]
@@ -152,7 +173,7 @@ def apnd_from_overpass(gdfin, querybound,
                             gdfosm_chunk = gdfosm_chunk.rename(columns={key: value_in})
                               # bad solution...
                     #add together
-                    gdfosm=gdfosm.append(gdfosm_chunk,ignore_index=True)
+                    gdfosm=gdfosm.append(gdfosm_chunk,ignore_index=True,sort=True)
                 #overwrite key and value_in if not None
                 if values_in is not None:
                     key = value_in

@@ -456,9 +456,9 @@ def Find_nearest_dwd_stations(inpt_data,
     #create new columns in the input data
     station_col_nm=list()
     for i in range(0,no_of_nearest_stations):
-        station_col_nm.append('station_'+str(i))
+        station_col_nm.append(data_category+'_station_'+str(i))
     for i in range(0,no_of_nearest_stations):
-        station_col_nm.append('distance_'+str(i))
+        station_col_nm.append(data_category+'_distance_'+str(i))
     #create new dataframe
     distance_data=pd.concat([pd.DataFrame(id_nearest_stations).astype(int),pd.DataFrame(dist_nearest_stations)],axis=1)
     distance_data.columns=station_col_nm
@@ -470,40 +470,37 @@ def Find_nearest_dwd_stations(inpt_data,
 def Apnd_dwd_data(inpt_data,dwd_dbase,
                          time_col='Date Time(UTC)',
                          data_time_format='%Y-%m-%d %H:%M:%S',
+                         data_category='air_temperature',
                          parameters=['2m_air_temperature','2m_relative_humidity'],
-                         no_of_nearest_stations=3): 
+                         no_of_nearest_stations=3,
+                         idw_exponent=1): 
     print('Start quering data from DWD and using IDW algorithm for parameter interpolation')
     # convert input time 
-    inpt_data[time_col] = pd.to_datetime(
-        inpt_data[time_col], format=data_time_format)
+    df_times = pd.to_datetime(inpt_data[time_col], format=data_time_format)
     
-    # create output datasets
-    output= gpd.GeoDataFrame(inpt_data[['Date Time(UTC)','geometry']])
     #add additional columns to the inpt data
-    inverse_dist=np.zeros((len(inpt_data),3))
+    inverse_dist=np.zeros((len(inpt_data),no_of_nearest_stations))
     for i in range (0,no_of_nearest_stations):
-        inverse_dist[:,i]=(1/inpt_data['distance_'+str(i)]**2) 
+        inverse_dist[:,i]=(1/inpt_data[data_category+'_distance_'+str(i)]**2) 
     for parameter in parameters:
         inpt_data[parameter]=-9999   
         #calculate the result for each matrix
         result_matrix=np.zeros((no_of_nearest_stations,len(inpt_data)))            
         #loop over all the available stations
         for i in range (0,no_of_nearest_stations):
-            station_data=dwd_dbase[parameter].sel(STATIONS_ID=xr.DataArray(inpt_data['station_'+str(i)]), time=xr.DataArray(inpt_data[time_col])).values
+            station_data=dwd_dbase[parameter].sel(STATIONS_ID=xr.DataArray(inpt_data[data_category+'_station_'+str(i)]), time=xr.DataArray(df_times)).values
             #http://xarray.pydata.org/en/stable/indexing.html                
             #check for nan values
             station_data[np.where(station_data==-999)]=np.nan
             #replace distance to 100000 if value is nan
-            inpt_data.loc[np.isnan(station_data),'distance_'+str(i)]=10000000
+            inpt_data.loc[np.isnan(station_data),data_category+'_distance_'+str(i)]=10000000
             #replace if distance is zero (can happen if device is at weather station the value with a value one digit smaller then GPS precision
-            inpt_data.loc[station_data==0,'distance_'+str(i)]=0.00000001
+            inpt_data.loc[station_data==0,data_category+'_distance_'+str(i)]=0.00000001
             #add inverse distances in dependence on the data
-            inverse_dist[:,i]=(1/inpt_data['distance_'+str(i)]**2)
-            # get the column for inverse distances
-            inverse_dist[:,i]=(1/inpt_data['distance_'+str(i)]**2) 
+            inverse_dist[:,i]=(1/inpt_data[data_category+'_distance_'+str(i)]**idw_exponent)
             #depending whether there is data or not, 
-            result_matrix[i,:]=np.array(station_data*(1/inpt_data['distance_'+str(i)]**2))
+            result_matrix[i,:]=np.array(station_data*(1/inpt_data[data_category+'_distance_'+str(i)]**idw_exponent))
         #add to new columns
-        output[parameter]=np.nansum(result_matrix,axis=0)/inverse_dist.sum(axis=1)
+        inpt_data[parameter]=np.nansum(result_matrix,axis=0)/inverse_dist.sum(axis=1)
     print('Finished querying from DWD')
-    return output
+    return inpt_data

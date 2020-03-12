@@ -74,7 +74,7 @@ def apnd_from_wcs(inpt_data,
         inpt_data = gpd.read_file(inpt_data)
     # check source coordinate system and convert to EPSG 4326
     src_epsg = inpt_data.crs
-    if src_epsg != 'epsg:4326':
+    if src_epsg.srs != 'epsg:4326':
         inpt_data['geometry'] = inpt_data['geometry'].to_crs(epsg=4326)
         print('geometry converted to EPSG:4326 for processing')
     # contact the wcs
@@ -120,10 +120,10 @@ def apnd_from_wcs(inpt_data,
     # create output_data
     outpt_data = inpt_data
     # convert geometry back to original projection
-    if src_epsg != 'epsg:4326':
+    if src_epsg.srs != 'epsg:4326':
         outpt_data['geometry'] = outpt_data['geometry'].to_crs(
-                epsg=int(src_epsg[5:]))
-        print('geometry converted back to EPSG:', src_epsg[5:], ' for output')
+                src_epsg.srs)
+        print('geometry converted back to EPSG:', src_epsg, ' for output')
     # create output shape if required
     if isinstance(output, str):
         inpt_data.to_file(output)
@@ -147,8 +147,8 @@ def apnd_from_restapi(inpt_data,
     if isinstance(inpt_data, str):
         inpt_data = gpd.read_file(inpt_data)
     # check source coordinate system and convert to EPSG 4326
-    src_epsg = inpt_data.crs.get('init')
-    if src_epsg != 'epsg:4326':
+    src_epsg = inpt_data.crs
+    if src_epsg.srs != 'epsg:4326':
         inpt_data['geometry'].to_crs(epsg=4326)
         print('geometry converted to EPSG:4326 for processing')
     # define attribute and depth strings for the query
@@ -162,7 +162,7 @@ def apnd_from_restapi(inpt_data,
     # Loop over all points : 0.5s per request
     for index, sampl_geomtr in inpt_data.iterrows():
         # extract the coordinates from geometry depending on type
-        if sampl_geomtr.geometry.geom_type is 'Point':
+        if sampl_geomtr.geometry.geom_type == 'Point':
             # for point we take directly the coordinates
             centercoords = np.array(sampl_geomtr.geometry.xy)
         else:
@@ -200,10 +200,10 @@ def apnd_from_restapi(inpt_data,
     # create output_data
     outpt_data = inpt_data
     # convert geometry back to original projection
-    if src_epsg != 'epsg:4326':
+    if src_epsg.srs != 'epsg:4326':
         outpt_data['geometry'] = outpt_data['geometry'].to_crs(
-                epsg=int(src_epsg[5:]))
-        print('geometry converted back to EPSG:', src_epsg[5:], ' for output')
+                src_epsg.srs)
+        print('geometry converted back to EPSG:', src_epsg, ' for output')
     if isinstance(output, str):
         inpt_data.to_file(output)
 
