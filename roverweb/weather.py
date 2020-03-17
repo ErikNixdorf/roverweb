@@ -100,17 +100,21 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase'):
         os.makedirs(dbase_dir)
         
     #check whether we have an up-to-date-station-list-already
-    stations_network_old=[s for s in os.listdir(dbase_dir) if 'dwd_station_network' in s][0]
-    datetime_network=datetime.date(datetime.strptime(re.findall('\d+',stations_network_old)[0],'%Y%m%d'))
-    #update if more than 24hours
-    dt_today=datetime.date(datetime.now())
-    if (dt_today-datetime_network)<timedelta(days=1):
-        print('DWD network list is up-to-date, no update needed')
-        filename_stations=dbase_dir+'\\'+stations_network_old
-        return filename_stations
-    else:
+    try:
+        stations_network_old=[s for s in os.listdir(dbase_dir) if 'dwd_station_network' in s][0]
+        datetime_network=datetime.date(datetime.strptime(re.findall('\d+',stations_network_old)[0],'%Y%m%d'))
+        #update if more than 24hours
+        dt_today=datetime.date(datetime.now())
+        if (dt_today-datetime_network)<timedelta(days=1):
+            print('DWD network list is up-to-date, no update needed')
+            filename_stations=dbase_dir+'\\'+stations_network_old
+            return filename_stations
+        else:
+            print('DWD network list neeeds to be updated')
+            os.remove(dbase_dir+'\\'+stations_network_old)
+    except:
         print('DWD network list neeeds to be updated')
-        os.remove(dbase_dir+'\\'+stations_network_old)
+        pass
     
     
     # header
@@ -173,7 +177,11 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase'):
     stations_network=stations_network.groupby(['STATIONS_ID'],as_index=False).agg('max')
     #replace zero by False in order to have pure boolean data
     stations_network.replace(0,False,inplace=True)
-    
+    #fix the error with station 14138 and 05614, which does not have pressure cord
+    stations_network.loc[stations_network.STATIONS_ID=='14138','pressure']=False
+    stations_network.loc[stations_network.STATIONS_ID=='05614','pressure']=False
+    #for temperature the same
+    stations_network.loc[stations_network.STATIONS_ID=='14138','air_temperature']=False
     #save to database writing the time as well
     filename_stations=dbase_dir+'\\dwd_station_network_'+datetime.now().strftime('%Y%m%d')+'.csv'
     stations_network.to_csv(filename_stations,index=False)
@@ -489,7 +497,7 @@ def Apnd_dwd_data(inpt_data,dwd_dbase,
         #loop over all the available stations
         for i in range (0,no_of_nearest_stations):
             station_data=dwd_dbase[parameter].sel(STATIONS_ID=xr.DataArray(inpt_data[data_category+'_station_'+str(i)]), time=xr.DataArray(df_times)).values
-            #http://xarray.pydata.org/en/stable/indexing.html                
+             #http://xarray.pydata.org/en/stable/indexing.html                
             #check for nan values
             station_data[np.where(station_data==-999)]=np.nan
             #replace distance to 100000 if value is nan
