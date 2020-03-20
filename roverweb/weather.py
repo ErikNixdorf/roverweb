@@ -382,7 +382,11 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
             dwd_product=dwd_product.drop(columns=['MESS_DATUM','quality_level_of_next_columns','end_of_record','index'])
             #append to database
             dwd_xr=dwd_product.to_xarray()
-            dwd_xr=dwd_xr.fillna(-999)
+            #replace all values equal to -999 to nan
+            for data_var in dwd_xr.data_vars:
+                dwd_xr[data_var]=dwd_xr[data_var].where(dwd_xr[data_var]>-999)
+            if station_id=='05009':
+                print('ok')            
             #only add relevant dates if available memoryis rather small
             
             if memory_save and timerange=='historical':
@@ -398,7 +402,7 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
             print(archive_name,' added to database')
     #upscale to required temporal resolution
     if resample_frequency is not None:
-        dwd_dbase=dwd_dbase.resample(time=resample_frequency).mean()
+        dwd_dbase=dwd_dbase.resample(time=resample_frequency).mean(skipna=True)
         print('DWD data upscaled to',time_res,'averages')
     if Output==True:
         dwd_dbase.to_netcdf(dbase_path)
@@ -512,3 +516,4 @@ def Apnd_dwd_data(inpt_data,dwd_dbase,
         inpt_data[parameter]=np.nansum(result_matrix,axis=0)/inverse_dist.sum(axis=1)
     print('Finished querying from DWD')
     return inpt_data
+
