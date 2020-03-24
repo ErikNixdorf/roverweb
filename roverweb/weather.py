@@ -486,10 +486,12 @@ def Apnd_dwd_data(inpt_data,dwd_dbase,
                          parameters=['2m_air_temperature','2m_relative_humidity'],
                          no_of_nearest_stations=3,
                          idw_exponent=1): 
-    print('Start quering data from DWD and using IDW algorithm for parameter interpolation')
+    print('Start quering data from DWD and using IDW algorithm for parameter interpolation')    
     # convert input time 
     df_times = pd.to_datetime(inpt_data[time_col], format=data_time_format)
-    
+    #correct if input parameter is str but not list
+    if isinstance(parameters,str):
+        parameters=[parameters]    
     #add additional columns to the inpt data
     inverse_dist=np.zeros((len(inpt_data),no_of_nearest_stations))
     for i in range (0,no_of_nearest_stations):
