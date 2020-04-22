@@ -38,7 +38,7 @@ def from_csv(inpt_data,
             ])
         inpt_data.crs = src_crs
         # check CRS and convert to EPSG if required
-        src_epsg = inpt_data.crs.get('init')
+        src_epsg = inpt_data.crs
         if src_epsg != 'epsg:4326':
             inpt_data['geometry'] = inpt_data['geometry'].to_crs(epsg=4326)
             print('geometry converted to EPSG:4326 for processing')
