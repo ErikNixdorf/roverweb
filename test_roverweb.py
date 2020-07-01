@@ -9,6 +9,7 @@ from roverweb import *
 import roverweb as rw
 import geopandas as gpd
 from datetime import datetime
+import os
 # load our dataset as geodataframe
 gdfRover = rw.geometry.from_csv(
     './testdata/Mueglitz-20190708_selection.csv',
@@ -104,6 +105,7 @@ gdfRover_osm_dwd_sg = rw.soilgrid.apnd_from_wcs(
 
 
 #finally we write out our results to an shapefile
+os.makedirs('output',exist_ok=True)
 gdfRover_osm_dwd_sg.to_csv('./output/Mueglitz-20190708_'
                        'selection_roverweb.csv')
 
