@@ -279,7 +279,7 @@ def points_to_footprint(inpt_data,
     outpt_data.crs=(crs_dst)
     outpt_data['geometry'] = outpt_data['geometry'].to_crs(crs_src)
     #swapping helps as pyproj 2.1.3 seems to have some errors
-    outpt_data.geometry = outpt_data.geometry.map(swap_xy)
+    #outpt_data.geometry = outpt_data.geometry.map(swap_xy)
     outpt_data.crs=(crs_src)
     print('geotransformation back to original', crs_src)
 
