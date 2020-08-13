@@ -9,6 +9,7 @@ from roverweb import *
 import roverweb as rw
 import geopandas as gpd
 from datetime import datetime
+import os
 # load our dataset as geodataframe
 gdfRover = rw.geometry.from_csv(
     './testdata/Mueglitz-20190708_selection.csv',
@@ -27,6 +28,7 @@ gdfRover_polyg=rw.geometry.points_to_footprint(gdfRover,footprint_radius=50,crs_
 clusters = 1  # number of clusters
 gdfRover_clust = rw.geometry.clustering(
     gdfRover_polyg, clusters=clusters, cluster_fld_name='ClusterID')
+"""
 # %%having our clustered dataset we can run our osm to get desired secondary
 # datasets
 # group geodataframe
@@ -61,7 +63,8 @@ for cluster_no in range(0, clusters):
         CountValues=True)
     # append subset back to entire dataset
     gdfRover_osm = gdfRover_osm.append(gdfRover_subset,sort=True)
-    
+"""
+gdfRover_osm=gdfRover_clust
 #%% Finally we get humidity values from dwd data,
 no_of_nearest_stations=4
 #create temporary columns from dwd data extraction
@@ -69,11 +72,11 @@ dwd_temporary_columns=['air_temperature'+'_station_'+str(i) for i in range(0,no_
 dwd_temporary_columns.extend(['air_temperature'+'_distance_'+str(i) for i in range(0,no_of_nearest_stations)])
 #correct index to start with 0
 gdfRover_osm=gdfRover_osm.reset_index(drop=True)
-#find nearest stations
+#find nearest stations for all three time categories
+
 gdfRover_osm_dwd_raw,dwd_base=rw.weather.Find_nearest_dwd_stations(gdfRover_osm.copy(),
     date_start=datetime.strptime(gdfRover_osm.iloc[0]['Date Time(UTC)'],'%Y-%m-%d %H:%M:%S').date().strftime('%Y%m%d'),
     date_end=datetime.strptime(gdfRover_osm.iloc[-1]['Date Time(UTC)'],'%Y-%m-%d %H:%M:%S').date().strftime('%Y%m%d'),
-    dwd_time_format='%Y%m%d%H',
     data_category='air_temperature',
     temp_resolution='hourly',
     no_of_nearest_stations=no_of_nearest_stations,
@@ -89,6 +92,26 @@ gdfRover_osm_dwd=rw.weather.Apnd_dwd_data(gdfRover_osm_dwd_raw,
                                           no_of_nearest_stations=no_of_nearest_stations,
                                           idw_exponent=2
                                           )
+#daily
+gdfRover_osm_dwd_raw,dwd_base=rw.weather.Find_nearest_dwd_stations(gdfRover_osm.copy(),
+    date_start=datetime.strptime(gdfRover_osm.iloc[0]['Date Time(UTC)'],'%Y-%m-%d %H:%M:%S').date().strftime('%Y%m%d'),
+    date_end=datetime.strptime(gdfRover_osm.iloc[-1]['Date Time(UTC)'],'%Y-%m-%d %H:%M:%S').date().strftime('%Y%m%d'),
+    data_category='kl',
+    temp_resolution='daily',
+    no_of_nearest_stations=no_of_nearest_stations,
+    memory_save=True,
+    Output=True)
+#add data
+gdfRover_osm_dwd=rw.weather.Apnd_dwd_data(gdfRover_osm_dwd_raw,
+                                          dwd_base,
+                                          time_col='Date Time(UTC)',
+                                          data_time_format='%Y-%m-%d %H:%M:%S',
+                                          data_category='kl',
+                                          parameters=['daily_minimum_of_temperature_at_2m_height','daily_maximum_of_temperature_at_2m_height'],
+                                          no_of_nearest_stations=no_of_nearest_stations,
+                                          idw_exponent=2
+                                          )
+haha
 #remove unneccesary colums
 gdfRover_osm_dwd.drop(columns=dwd_temporary_columns,inplace=True)
 # %% Next we add data from soilgrid_network from wcs (faster than restapi)
@@ -104,6 +127,7 @@ gdfRover_osm_dwd_sg = rw.soilgrid.apnd_from_wcs(
 
 
 #finally we write out our results to an shapefile
+os.makedirs('output',exist_ok=True)
 gdfRover_osm_dwd_sg.to_csv('./output/Mueglitz-20190708_'
                        'selection_roverweb.csv')
 
