@@ -533,7 +533,7 @@ def Apnd_dwd_data(inpt_data,dwd_dbase,
             #replace distance to 100000 if value is nan
             inpt_data.loc[np.isnan(station_data),data_category+'_distance_'+str(i)]=10000000
             #replace if distance is zero (can happen if device is at weather station the value with a value one digit smaller then GPS precision
-            inpt_data.loc[station_data==0,data_category+'_distance_'+str(i)]=0.00000001
+            inpt_data.loc[inpt_data[data_category+'_distance_'+str(i)]==0,data_category+'_distance_'+str(i)]=0.00000001
             #add inverse distances in dependence on the data
             inverse_dist[:,i]=(1/inpt_data[data_category+'_distance_'+str(i)]**idw_exponent)
             #depending whether there is data or not, 
