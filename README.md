@@ -33,4 +33,18 @@ gdfRover_clust = rw.geometry.clustering(
 ```
 
 ### osm.py
-osm.py module retrieves data from openstreetmap via overpass API. Input needs to be polygon-like. Different ```queryfeatures``` can be selected and specific entries can ignored as well. Usually, more than one feature can be found for each polygon. Hence, the majority entry is assigned to the output geodataframe representing the geometry. In addition, if ```CountValues=True```, the sum of counts of the majority feature is provided as output entry
+osm.py module retrieves data from openstreetmap via overpass API. Input needs to be polygon-like. Entries from different ```queryfeatures``` can be selected (```values_in```)  and specific entries can ignored as well (```values_out```). Usually, more than one feature can be found for each polygon. Hence, the majority entry is assigned to the output geodataframe representing the geometry. In addition, if ```CountValues=True```, the sum of counts of the majority feature is provided as output entry.
+
+code example:
+```python
+import roverweb as rw
+gdf_out = rw.osm.apnd_from_overpass(
+        gdf_in,
+        querygeobound,
+        queryfeatures={'way': ['highway']},
+        values_out=['service','footway'])
+```
+### soilgrid.py
+coming soon
+### weather.py
+coming soono
