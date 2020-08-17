@@ -68,7 +68,7 @@ def connect_ftp(server = 'opendata.dwd.de',connected=False):
             print('Reconnect to Server')
             pass
     return ftp
-def update_stationlist(time_res='hourly',dbase_dir='dbase'):
+def update_stationlist(time_res='hourly',dbase_dir='dbase',data_category='air_tremperature'):
     """
     small function to get updated dwd station list
     
@@ -98,6 +98,9 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase'):
 
     # lets start
     print('Updating station list')
+    
+    #load metadata table
+    dwd_datasets_meta=dwd_datasets_meta=json.load(open(dbase_dir+"\\dwd_station_meta.txt"))
         
     # create output directory if not existing
     
@@ -113,7 +116,8 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase'):
         if (dt_today-datetime_network)<timedelta(days=1):
             print('DWD network list is up-to-date, no update needed')
             filename_stations=dbase_dir+'\\'+stations_network_old
-            return filename_stations
+            time_res_dbase=time_res
+            return (filename_stations, time_res_dbase)
         else:
             print('DWD network list neeeds to be updated')
             os.remove(dbase_dir+'\\'+stations_network_old)
@@ -136,30 +140,63 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase'):
     #if data is not daily, we have to check categorywise the availability of information
     #get dwd categories
     dwd_categories=ftp.nlst()
+    
+    if data_category in dwd_categories:
+        time_res_dbase=time_res
+    elif time_res=='daily':
+            #check hourly database
+            time_res_dbase='hourly'
+            ftp.cwd('/climate_environment/CDC/observations_germany/climate/' + time_res_dbase +'/')
+            dwd_categories=ftp.nlst()
+            if data_category in dwd_categories:
+                print(data_category,' is not provided at the required resolution, daily_mean of hourly data used instead')
+            else:
+                time_res_dbase='10_minutes'
+                if data_category in dwd_categories:
+                    ftp.cwd('/climate_environment/CDC/observations_germany/climate/' + time_res_dbase +'/')
+                    dwd_categories=ftp.nlst()  
+                if data_category in dwd_categories:
+                    print(data_category,' is not provided at the required resolution, daily_mean of 10_minutes data used instead')
+                else:
+                    print(data_category, 'not available')
+                    sys.exit(1)       
+    elif time_res=='hourly':
+        time_res_dbase='10_minutes'
+        if data_category in dwd_categories:
+            ftp.cwd('/climate_environment/CDC/observations_germany/climate/' + time_res_dbase +'/')
+            dwd_categories=ftp.nlst()  
+        if data_category in dwd_categories:
+            print(data_category,' is not provided at the required resolution, daily_mean of 10_minutes data used instead')
+        else:
+            print(data_category, 'not available')        
+            sys.exit(1)      
+    
     #loop through the subfolders  to get the station lists
+
     for category in dwd_categories:
+        #retreive station_list   
         print('retrieve stationlist for', category)
         #try to get historical data
         try:
-            dir_path='/climate_environment/CDC/observations_germany/climate/' + time_res +'/'+category+'/historical/'
+            dir_path='/climate_environment/CDC/observations_germany/climate/' + time_res_dbase +'/'+category+'/historical/'
             ftp.cwd(dir_path)
         except Exception as e:
             print(e, 'try to download category', category, 'from other folder')
             try:
-                dir_path='/climate_environment/CDC/observations_germany/climate/' + time_res +'/'+category+'/'
+                dir_path='/climate_environment/CDC/observations_germany/climate/' + time_res_dbase +'/'+category+'/'
                 ftp.cwd(dir_path)
             except:
                 print('Category', category, 'could not have been downloaded')
                 pass
         #get the filename of the station list
-        if time_res=='hourly':
+        if time_res_dbase=='hourly':
             filename=dwd_abbr[category]+'_Stundenwerte_Beschreibung_Stationen.txt'
-        if time_res=='daily':
+        if time_res_dbase=='daily':
             if dwd_abbr[category] =='wetter':
                 filename=dwd_abbr[category]+'_tageswerte_Beschreibung_Stationen.txt'
             else:                    
                 filename=dwd_abbr[category]+'_Tageswerte_Beschreibung_Stationen.txt'
-        if time_res=='10_minutes':
+        if time_res_dbase=='10_minutes':
             filename='zehn_min_'+dwd_abbr[category].lower()+'_Beschreibung_Stationen.txt'
         #retrieve the stationlist
         stationlist = []
@@ -201,12 +238,12 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase'):
     #for temperature the same
     stations_network.loc[stations_network.STATIONS_ID=='14138','air_temperature']=False
     #save to database writing the time as well
-    filename_stations=dbase_dir+'\\dwd_station_network_' + time_res+'_' + datetime.now().strftime('%Y%m%d')+'.csv'
+    filename_stations=dbase_dir+'\\dwd_station_network_' + time_res_dbase +'_' + datetime.now().strftime('%Y%m%d')+'.csv'
     stations_network.to_csv(filename_stations,index=False)
                   
     print('Updating station list...finished')
     
-    return  filename_stations
+    return  (filename_stations, time_res_dbase)
 
 
 def nearest_direct(row, gdf1, gdf2, src_column=None):
@@ -461,7 +498,12 @@ def Find_nearest_dwd_stations(inpt_data,
     table_dir = pypath + '\\' + 'tables'
     dbase_dir = pypath + '\\' + 'dbase'    
     #%% we check all available stations and create a valid list
-    filename_stations=update_stationlist(time_res=temp_resolution,dbase_dir=table_dir)
+    filename_stations,time_res_dbase=update_stationlist(time_res=temp_resolution,dbase_dir=table_dir,data_category=data_category)
+    
+    #update time format
+    dwd_time_format=dwd_time_formats[time_res_dbase]
+    
+    #read station data
     stations_all=pd.read_csv(filename_stations, dtype={'STATIONS_ID': object})
     # delete all stations which do not cover the category
     dwd_stations=stations_all[stations_all[data_category]==True].copy()

@@ -35,6 +35,7 @@ gdfRover_clust = rw.geometry.clustering(
 gdfRover_grouped = gdfRover_clust.groupby('ClusterID')
 # create an empty result geodataframe
 gdfRover_osm = gpd.GeoDataFrame()
+"""
 # inititate the loop
 for cluster_no in range(0, clusters):
     # create a subset of the original geodataframe
@@ -63,7 +64,7 @@ for cluster_no in range(0, clusters):
         CountValues=True)
     # append subset back to entire dataset
     gdfRover_osm = gdfRover_osm.append(gdfRover_subset,sort=True)
-
+"""
 gdfRover_osm=gdfRover_clust
 #%% Finally we get humidity values from dwd data,
 no_of_nearest_stations=4
