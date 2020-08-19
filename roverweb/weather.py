@@ -388,12 +388,14 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
         with xr.open_dataset(dbase_path) as dwd_dbase:
             dwd_dbase.load()
             print('Existing database imported')
-         #get the non_nans stations
-        current_stations=np.array(dwd_dbase[list(dwd_dbase.keys())[0]].sel(time=date_mean,method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
+         #get the non_nans stations covering the  entire campaign
+        current_stations_0=np.array(dwd_dbase[list(dwd_dbase.keys())[0]].sel(time=campaign_time[0],method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
+        current_stations_1=np.array(dwd_dbase[list(dwd_dbase.keys())[0]].sel(time=campaign_time[1],method='nearest').dropna('STATIONS_ID').coords['STATIONS_ID'])
     else:
         print(dbase_path, 'does not exist, we create a new netcdf_file')
         dwd_dbase=xr.Dataset()
-        current_stations=np.array((-9999)).reshape(1)
+        current_stations_0=np.array((-9999)).reshape(1)
+        current_stations_1=np.array((-9999)).reshape(1)
     #change directory on server
     for timerange in timeranges:
         archive_url='/climate_environment/CDC/observations_germany/climate/'+time_res_dbase+'/'+data_category+'/'+timerange       
@@ -401,7 +403,7 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
         #get the archive
         for station_id in station_ids:
             #we check whether the station is in the database with this parameter already
-            if int(station_id) in current_stations:
+            if int(station_id) in current_stations_0 and int(station_id) in current_stations_1:
                 print('Station', station_id, 'with category', data_category,'in ',timerange,'dbase already')
                 continue
             try:
@@ -452,8 +454,8 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
                 dwd_dbase=xr.merge([dwd_dbase,dwd_xr])
             except Exception as e:
                 print(e)
-                print('try merging with compat=override')
-                dwd_dbase=xr.merge([dwd_dbase,dwd_xr],compat='override')
+                print('try merging with compat=no_conflicts')
+                dwd_dbase=xr.merge([dwd_dbase,dwd_xr],compat='no_conflicts')
             print(archive_name,' added to database')
     #upscale to required temporal resolution
     if resample_frequency is not None:
