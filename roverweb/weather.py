@@ -454,8 +454,8 @@ def import_stations(time_res='hourly',time_format='%Y%m%d%H',
                 dwd_dbase=xr.merge([dwd_dbase,dwd_xr])
             except Exception as e:
                 print(e)
-                print('try merging with compat=no_conflicts')
-                dwd_dbase=xr.merge([dwd_dbase,dwd_xr],compat='no_conflicts')
+                print('try merging with compat=override')
+                dwd_dbase=xr.merge([dwd_dbase,dwd_xr],compat='override')
             print(archive_name,' added to database')
     #upscale to required temporal resolution
     if resample_frequency is not None:

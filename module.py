@@ -19,7 +19,7 @@ gdfRover = rw.geometry.from_csv(
         'init': 'epsg:4326'
     })
 
-gdfRover=gpd.GeoDataFrame.from_file( './testdata/cold_alpine.shp')
+#gdfRover=gpd.GeoDataFrame.from_file( './testdata/Mueglitz-20190708_selection.csv')
 # create a circular footprint (polygon) around the gps points
 gdfRover_circls = rw.geometry.points_to_circle(
     gdfRover, crcl_radius=100, number_of_points=10)
@@ -27,6 +27,19 @@ gdfRover_circls = rw.geometry.points_to_circle(
 # instead we can also create a true footprint which consideres that the rover is moving,
 # basically a parallelogram attached on both sides with two half circles
 gdfRover_polyg=rw.geometry.points_to_footprint(gdfRover,footprint_radius=50,crs_src = "epsg:4326",crs_dst = "epsg:4326",number_of_points=10,inpt_geo_type='Point')
+
+
+#%% get data from soilgrids
+gdfRover_sg=rw.soilgrid.apnd_from_wcs(gdfRover_polyg,
+                  soilgridlrs=['sand','silt'],
+                  soil_layerdepths=['60-100cm'],
+                  raster_res=(250, 250), 
+                  statistical_metric=['mean'],
+                  all_touched=True, 
+                  output=None)
+
+
+haha
 # Next is that we cluster our datasets in order to improve query speed
 clusters = 1  # number of clusters
 gdfRover_clust = rw.geometry.clustering(
@@ -38,6 +51,9 @@ gdfRover_clust = rw.geometry.clustering(
 gdfRover_grouped = gdfRover_clust.groupby('ClusterID')
 # create an empty result geodataframe
 gdfRover_osm = gpd.GeoDataFrame()
+
+#%% get from soilgrids
+
 
 # inititate the loop
 for cluster_no in range(0, clusters):
