@@ -173,7 +173,7 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase',data_category='air_tr
     
     #loop through the subfolders  to get the station lists
 
-    for category in dwd_categories:
+    for category in [data_category]:
         #retreive station_list   
         print('retrieve stationlist for', category)
         #try to get historical data
@@ -225,7 +225,7 @@ def update_stationlist(time_res='hourly',dbase_dir='dbase',data_category='air_tr
         #A=[sub.split(" ") for sub in stationlist]        
     
     #replace all Na by False
-    stations_network[stations_network.isna()]=0      
+    stations_network.loc[stations_network[data_category].isna(),data_category]=0      
     #aggregate
     stations_network=stations_network.groupby(['STATIONS_ID'],as_index=False).agg('max')
     #replace zero by False in order to have pure boolean data
