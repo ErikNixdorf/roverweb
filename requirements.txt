@@ -1,5 +1,5 @@
 overpass==0.7
-numpy==1.18.0
+numpy==1.22.0
 xarray==0.15.0
 requests==2.24.0
 Shapely==1.7.0
